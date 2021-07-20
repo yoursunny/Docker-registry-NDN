@@ -57,6 +57,12 @@ var app = &cli.App{
 			Name:  "router",
 			Usage: "use specific NDN router (UDP host:port or unix socket path)",
 		},
+		&cli.StringFlag{
+			Name:        "probe-interest",
+			Usage:       "probe Interest name (when using NDN-FCH)",
+			Destination: &probeInterestName,
+			Value:       probeInterestName,
+		},
 		&cli.IntFlag{
 			Name:        "retx",
 			Usage:       "Interest retransmission limit",
@@ -89,9 +95,10 @@ var app = &cli.App{
 		upstreamPrefix = ndn.ParseName(c.String("name"))
 
 		if router := c.String("router"); router != "" {
-			e = connectToRouter(c.Context, router, false)
+			probeInterestName = ""
+			e = connectToRouter(c.Context, router)
 		} else {
-			e = connectToTestbed(c.Context)
+			e = connectToNetwork(c.Context)
 		}
 		if e != nil {
 			return cli.Exit(e, 1)
