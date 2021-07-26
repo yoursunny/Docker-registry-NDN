@@ -3,12 +3,11 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,17 +19,18 @@ import (
 )
 
 func handleV2(w http.ResponseWriter, req *http.Request) {
-	logEntry := logger.With(zap.String("method", req.Method), zap.String("uri", req.URL.String()))
 	req.URL.Scheme = upstreamScheme
 	req.URL.Host = upstreamHost
 
 	if name := parseBlobRequest(req.URL); name != nil && req.Method == http.MethodGet {
-		if e := proxyToNDN(logEntry, w, req, name); e != nil {
-			redirectToHTTP(logEntry, w, req)
-		}
-		return
+		proxyToNDN(w, req, name)
+	} else {
+		proxyToHTTP(w, req, 0)
 	}
-	proxyToHTTP(logEntry, w, req)
+}
+
+func makeLogEntry(req *http.Request) *zap.Logger {
+	return logger.With(zap.String("method", req.Method), zap.String("uri", req.URL.Path))
 }
 
 func parseBlobRequest(url *url.URL) ndn.Name {
@@ -54,12 +54,11 @@ func parseBlobRequest(url *url.URL) ndn.Name {
 
 var ndnThrottle sync.Mutex
 
-func proxyToNDN(logEntry *zap.Logger, w http.ResponseWriter, req *http.Request, name ndn.Name) error {
-	logEntry = logEntry.With(zap.Stringer("name", name))
+func proxyToNDN(w http.ResponseWriter, req *http.Request, name ndn.Name) {
+	logEntry := makeLogEntry(req).With(zap.Stringer("name", name))
 	logEntry.Debug("fetch queued")
 	t0 := time.Now()
 	ndnThrottle.Lock()
-	defer ndnThrottle.Unlock()
 	logEntry.Debug("fetch start", zap.Duration("waited", time.Since(t0)))
 
 	timeout, cancel := context.WithTimeout(req.Context(), ndnFetchTimeout)
@@ -84,7 +83,7 @@ func proxyToNDN(logEntry *zap.Logger, w http.ResponseWriter, req *http.Request, 
 			)
 
 			if cnt == historyCounts[0] {
-				logEntry.Warn("fetch no progress, canceling")
+				logEntry.Warn("fetch no progress, aborting")
 				cancel()
 			}
 			copy(historyCounts, historyCounts[1:])
@@ -92,36 +91,53 @@ func proxyToNDN(logEntry *zap.Logger, w http.ResponseWriter, req *http.Request, 
 		}
 	}()
 
-	blob, e := fetcher.Payload(timeout)
+	chunks := make(chan []byte)
+	fetchErr := make(chan error)
+	sendSize := 0
+	sendDone := make(chan struct{})
+	go func() { fetchErr <- fetcher.Chunks(timeout, chunks) }()
+	go func() {
+		defer close(sendDone)
+		for chunk := range chunks {
+			if sendSize == 0 {
+				w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
+				w.Header().Set("Content-Type", "application/octet-stream")
+			}
+			sendSize += len(chunk)
+			w.Write(chunk)
+		}
+	}()
+	e, _ := <-fetchErr, <-sendDone
 	ticker.Stop()
-	if e != nil {
-		logEntry.Warn("fetch error", zap.Error(e))
-		return e
-	}
-	logEntry.Debug("fetch success",
-		zap.Duration("duration", time.Since(t0)),
-		zap.Int("size", len(blob)),
-	)
+	ndnThrottle.Unlock()
 
-	digest := sha256.Sum256(blob)
-	if subtle.ConstantTimeCompare(name.Get(-1).Value, digest[:]) != 1 {
-		logEntry.Warn("bad digest")
-		return errors.New("bad digest")
+	logEntry = logEntry.With(zap.Duration("duration", time.Since(t0)), zap.Int("size", sendSize), zap.Error(e))
+
+	if e == nil {
+		logEntry.Debug("fetch success")
+		return
 	}
 
-	w.Header().Set("Docker-Distribution-API-Version", "registry/2.0")
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(blob)
-	return nil
+	if sendSize == 0 {
+		logEntry.Warn("fetch error, redirecting")
+		redirectToHTTP(w, req)
+	} else {
+		logEntry.Warn("fetch error, proxying")
+		proxyToHTTP(w, req, sendSize)
+	}
 }
 
-func redirectToHTTP(logEntry *zap.Logger, w http.ResponseWriter, req *http.Request) {
+func redirectToHTTP(w http.ResponseWriter, req *http.Request) {
+	logEntry := makeLogEntry(req)
 	logEntry.Debug("redirect", zap.Stringer("dest", req.URL))
 	http.Redirect(w, req, req.URL.String(), http.StatusTemporaryRedirect)
 }
 
-func proxyToHTTP(logEntry *zap.Logger, w http.ResponseWriter, req *http.Request) {
-	logEntry = logEntry.With(zap.Stringer("upstream", req.URL))
+func proxyToHTTP(w http.ResponseWriter, req *http.Request, rangeStart int) {
+	logEntry := makeLogEntry(req).With(zap.Stringer("upstream", req.URL))
+	if rangeStart > 0 {
+		logEntry = logEntry.With(zap.Int("range-start", rangeStart))
+	}
 
 	uReq, e := http.NewRequestWithContext(req.Context(), req.Method, req.URL.String(), req.Body)
 	if e != nil {
@@ -129,24 +145,32 @@ func proxyToHTTP(logEntry *zap.Logger, w http.ResponseWriter, req *http.Request)
 		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
-	uReq.Header = req.Header
+	uReq.Header = req.Header.Clone()
+	if rangeStart > 0 {
+		uReq.Header.Set("Range", "bytes="+strconv.Itoa(rangeStart)+"-")
+	}
 
 	resp, e := http.DefaultClient.Do(uReq)
 	if e != nil {
 		logEntry.Warn("proxy error", zap.Error(e))
-		w.WriteHeader(http.StatusBadGateway)
+		if rangeStart == 0 {
+			w.WriteHeader(http.StatusBadGateway)
+		}
 		return
 	}
+
+	if rangeStart == 0 {
+		for header, headerSlice := range resp.Header {
+			for _, headerValue := range headerSlice {
+				w.Header().Add(header, headerValue)
+			}
+		}
+		w.WriteHeader(resp.StatusCode)
+	}
+
 	logEntry.Debug("proxied",
 		zap.Int("status", resp.StatusCode),
 		zap.String("length", resp.Header.Get("Content-Length")),
 	)
-
-	for header, headerSlice := range resp.Header {
-		for _, headerValue := range headerSlice {
-			w.Header().Add(header, headerValue)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
 }
