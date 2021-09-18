@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { openUplinks } from "@ndn/cli-common";
 import { Endpoint } from "@ndn/endpoint";
 import { Segment } from "@ndn/naming-convention2";
@@ -42,5 +43,5 @@ import { fetchChunk } from "./fetch.js";
 })()
   .catch((err) => {
     console.error(err);
-    process.exit(1); // eslint-disable-line unicorn/no-process-exit
+    process.exit(1);
   });

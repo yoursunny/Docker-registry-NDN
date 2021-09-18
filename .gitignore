@@ -1,7 +1,8 @@
+*.out
 .env
-.vscode
+/.vscode
+/package-lock.json
+/pnpm-lock.yaml
 ecosystem.config.js
 node_modules/
-package-lock.json
-pnpm-lock.yaml
 runtime/
