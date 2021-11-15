@@ -34,7 +34,7 @@ func connectToNetwork(ctx context.Context) error {
 
 	connectErrors := []error{}
 	for _, router := range res.Routers {
-		if e := connectToRouter(ctx, router.Connect); e == nil {
+		if e = connectToRouter(ctx, router.Connect); e == nil {
 			fchLogger.Info("connected", zap.String("router", router.Connect))
 			return nil
 		}
