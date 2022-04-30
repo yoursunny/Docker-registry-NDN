@@ -1,7 +1,6 @@
 *.out
 .env
 /.vscode
-/package-lock.json
 /pnpm-lock.yaml
 ecosystem.config.js
 node_modules/

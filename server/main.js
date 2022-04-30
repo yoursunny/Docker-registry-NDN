@@ -3,7 +3,7 @@ import { openUplinks } from "@ndn/cli-common";
 import { Endpoint } from "@ndn/endpoint";
 import { Segment } from "@ndn/naming-convention2";
 import { Data } from "@ndn/packet";
-import { toHex } from "@ndn/tlv";
+import { console, toHex } from "@ndn/util";
 
 import { env, prefix } from "./env.js";
 import { fetchChunk } from "./fetch.js";

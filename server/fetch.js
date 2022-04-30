@@ -1,3 +1,4 @@
+import { console } from "@ndn/util";
 import LRUMap from "mnemonist/lru-map.js";
 import fetch from "node-fetch";
 

@@ -12,12 +12,14 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 
-	"github.com/pkg/math"
+	"github.com/gorilla/schema"
 	"github.com/usnistgov/ndn-dpdk/ndn"
+	"github.com/zyedidia/generic"
 )
+
+var encoder = schema.NewEncoder()
 
 const (
 	DefaultServer    = "https://fch.ndn.today"
@@ -27,20 +29,20 @@ const (
 // Request represents an NDN-FCH request.
 type Request struct {
 	// Server is the base URI of the NDN- server.
-	Server string
+	Server string `schema:"-"`
 
 	// Transport specifies a transport protocol.
-	Transport string
+	Transport string `schema:"cap"`
 
 	// Count specifies number of requested routers.
-	Count int
+	Count int `schema:"k"`
 }
 
 func (req *Request) applyDefaults() {
 	if req.Server == "" {
 		req.Server = DefaultServer
 	}
-	req.Count = math.MaxInt(1, req.Count)
+	req.Count = generic.Max(1, req.Count)
 	if req.Transport == "" {
 		req.Transport = DefaultTransport
 	}
@@ -51,8 +53,9 @@ func (req Request) toURL() (u *url.URL, e error) {
 		return nil, e
 	}
 	qs := url.Values{}
-	qs.Set("cap", req.Transport)
-	qs.Set("k", strconv.Itoa(req.Count))
+	if e = encoder.Encode(req, qs); e != nil {
+		return nil, e
+	}
 	u.RawQuery = qs.Encode()
 	return u, nil
 }
