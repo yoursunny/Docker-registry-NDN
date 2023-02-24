@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -116,6 +115,5 @@ var app = &cli.App{
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
 	app.Run(os.Args)
 }

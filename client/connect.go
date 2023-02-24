@@ -10,9 +10,9 @@ import (
 
 	"github.com/usnistgov/ndn-dpdk/ndn"
 	"github.com/usnistgov/ndn-dpdk/ndn/endpoint"
+	"github.com/usnistgov/ndn-dpdk/ndn/fch"
 	"github.com/usnistgov/ndn-dpdk/ndn/l3"
 	"github.com/usnistgov/ndn-dpdk/ndn/sockettransport"
-	"github.com/yoursunny/Docker-registry-NDN/client/fch"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
@@ -48,7 +48,7 @@ func connectToRouter(ctx context.Context, router string) (e error) {
 	if strings.HasPrefix(router, "/") {
 		network = "unix"
 	}
-	tr, e := sockettransport.Dial(network, "", router)
+	tr, e := sockettransport.Dial(network, "", router, sockettransport.Config{})
 	if e != nil {
 		return e
 	}
