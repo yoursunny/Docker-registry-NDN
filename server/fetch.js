@@ -1,18 +1,17 @@
 import { console } from "@ndn/util";
 import LRUMap from "mnemonist/lru-map.js";
-import fetch from "node-fetch";
 
 import { env } from "./env.js";
 
 class RangeResponse {
   /**
    * @param {number} firstSegment
-   * @param {Uint8Array} body
+   * @param {ArrayBuffer} body
    * @param {string|undefined} contentRangeHeader
    */
   constructor(firstSegment, body, contentRangeHeader) {
     this.firstSegment = firstSegment;
-    this.body = body;
+    this.body = new Uint8Array(body);
     if (contentRangeHeader) {
       const m = /^bytes \d+-\d+\/(\d+)$/.exec(contentRangeHeader);
       if (m) {
@@ -27,7 +26,7 @@ class RangeResponse {
    */
   get(segment) {
     const segmentOffset = segment - this.firstSegment;
-    return this.body.slice(
+    return this.body.subarray(
       env.chunkSize * segmentOffset,
       env.chunkSize * (segmentOffset + 1),
     );
@@ -35,10 +34,10 @@ class RangeResponse {
 }
 
 /**
- *
- * @param {string} repository
- * @param {string} blobDigest
- * @param {number} firstSegment
+ * Retrieve a range in a Docker blob.
+ * @param {string} repository Docker repository name.
+ * @param {string} blobDigest SHA256 digest of the blob.
+ * @param {number} firstSegment first segment number.
  * @returns {Promise<RangeResponse|undefined>}
  */
 async function fetchRange(repository, blobDigest, firstSegment) {
@@ -53,7 +52,7 @@ async function fetchRange(repository, blobDigest, firstSegment) {
 
   return new RangeResponse(
     firstSegment,
-    await response.buffer(),
+    await response.arrayBuffer(),
     response.headers.get("content-range"),
   );
 }
@@ -62,9 +61,10 @@ async function fetchRange(repository, blobDigest, firstSegment) {
 const fetchingRanges = new LRUMap(env.fetchCaches);
 
 /**
- * @param {string} repository
- * @param {string} blobDigest
- * @param {number} segment
+ * Retrieve a segment in a Docker blob.
+ * @param {string} repository Docker repository name.
+ * @param {string} blobDigest SHA256 digest of the blob.
+ * @param {number} segment segment number.
  * @returns {Promise<{ chunk: Uint8Array, totalSize?: number } | undefined>}
  */
 export async function fetchChunk(repository, blobDigest, segment) {

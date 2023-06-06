@@ -12,10 +12,10 @@ Therefore, this program translates blob retrieval requests to NDN segmented obje
 The [server](server/) program should run on the same machine or very close to the Docker registry.
 It requires a local NDN forwarder, which should have a globally reachable name prefix.
 
-1. Install Node.js 18.x and PM2 process manager.
+1. Install Node.js 20.x and PM2 process manager.
 2. Clone this repository.
 3. Copy `server/sample.env` to `server/.env` and make changes according to the instructions within.
-4. Install dependencies: `corepack pnpm install -P`
+4. Install dependencies: `corepack pnpm install --prod`
 5. Start service: `pm2 start --name Docker-registry-NDN --restart-delay 10000 --cwd server main.js`
 
 ## Client Installation and Usage
@@ -23,7 +23,7 @@ It requires a local NDN forwarder, which should have a globally reachable name p
 The [client](client/) program should run on every client that intends to pull from the Docker registry.
 It does not require a local NDN forwarder.
 
-1. Install Go 1.18.
+1. Install Go 1.20.
 2. Build the client: `env GOBIN=$(pwd) CGO_ENABLED=0 go install github.com/yoursunny/Docker-registry-NDN/client@latest && mv client Docker-registry-NDN-client`
 
 Run `./Docker-registry-NDN-client --help` to see available command line flags.
