@@ -7,7 +7,7 @@ In Docker registry API, blob retrieval, i.e. pulling a layer in a Docker image, 
 Since each blob, identified by its digest, is immutable, this offers a prime opportunity to take advantage of in-network caching in the NDN network.
 Therefore, this program translates blob retrieval requests to NDN segmented object retrieval, while all other requests are proxied over HTTPS.
 
-## Server Installation
+## Server Installation (PM2)
 
 The [server](server/) program should run on the same machine or very close to the Docker registry.
 It requires a local NDN forwarder, which should have a globally reachable name prefix.
@@ -17,6 +17,26 @@ It requires a local NDN forwarder, which should have a globally reachable name p
 3. Copy `server/sample.env` to `server/.env` and make changes according to the instructions within.
 4. Install dependencies: `corepack pnpm install --prod`
 5. Start service: `pm2 start --name Docker-registry-NDN --restart-delay 10000 --cwd server main.js`
+
+## Server Installation (Docker)
+
+Build the server container image:
+
+```bash
+docker build -t docker.yoursunny.dev/registry-ndn-server -f server.Dockerfile .
+```
+
+Start the server container:
+
+```bash
+docker run -d --name registry-ndn-server \
+  --mount type=bind,source=/run/nfd.sock,target=/run/nfd.sock,readonly=true \
+  -e DOCKER_NDN_REGISTRY=http://172.17.0.2:5000 \
+  -e DOCKER_NDN_NAME=/docker \
+  docker.yoursunny.dev/registry-ndn-server
+```
+
+See [server/sample.env](server/sample.env) for explanation of the environment variables.
 
 ## Client Installation and Usage
 

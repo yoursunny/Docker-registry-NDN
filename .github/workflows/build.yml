@@ -20,46 +20,51 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/nfd-nightly.list
           sudo apt-get update
           sudo apt-get install --no-install-recommends nfd
-      - name: Setup Docker registry
+      - name: Build server
+        uses: docker/build-push-action@v5
+        with:
+          tags: localhost/registry-ndn-server
+          context: .
+          file: server.Dockerfile
+      - name: Setup registry and server
         run: |
           docker image pull registry:2
           docker run -d --name registry --publish 127.0.0.1:5000:5000 registry:2
+          docker run -d --name registry-ndn-server \
+            --mount type=bind,source=/run/nfd.sock,target=/run/nfd.sock,readonly=true \
+            -e DOCKER_NDN_REGISTRY=$(docker inspect -f 'http://{{.NetworkSettings.IPAddress}}:5000' registry) \
+            -e DOCKER_NDN_NAME=/docker \
+            localhost/registry-ndn-server
+      - name: Build client
+        run: |
+          env GOBIN=$HOME CGO_ENABLED=0 go install ./client
+          mv ~/client ~/Docker-registry-NDN-client
+      - name: Start client
+        uses: JarvusInnovations/background-action@v1
+        with:
+          run: |
+            ~/Docker-registry-NDN-client \
+              --listen :3000 --upstream http://localhost:5000 \
+              --name /docker --router /run/nfd.sock &
+          wait-on: tcp:127.0.0.1:3000
+          log-output-if: true
+      - name: Push demo image to registry
+        run: |
           docker image inspect -f '{{.Id}}' buildpack-deps:bullseye | tee ~/push-image-id
           docker image tag buildpack-deps:bullseye localhost:5000/demo
           docker image push localhost:5000/demo
           docker image prune -fa
-      - name: Build Docker-registry-NDN server
-        run: |
-          corepack pnpm install
-          corepack pnpm typecheck
-      - name: Build Docker-registry-NDN client
-        run: |
-          env GOBIN=$HOME CGO_ENABLED=0 go install ./client
-      - name: Check code style
-        run: |
-          corepack pnpm lint
-          go fmt ./...
-          go vet ./...
-          git diff --exit-code
-      - name: Start Docker-registry-NDN server
-        uses: JarvusInnovations/background-action@v1
-        with:
-          working-directory: server
-          run: |
-            sed '/^DOCKER_NDN_NAME=/ s|=.*|=/docker|' sample.env > .env
-            node ./main.js &
-          wait-on: tcp:127.0.0.1:5000
-          log-output-if: true
-      - name: Start Docker-registry-NDN client
-        uses: JarvusInnovations/background-action@v1
-        with:
-          run: |
-            ~/client --listen :3000 --upstream http://localhost:5000 --name /docker --router /run/nfd.sock &
-          wait-on: tcp:127.0.0.1:3000
-          log-output-if: true
-      - name: Pull Docker image over NDN
+      - name: Pull demo image over NDN
         run: |
           docker image pull localhost:3000/demo
           docker image inspect -f '{{.Id}}' localhost:3000/demo | tee ~/pull-image-id
           diff ~/push-image-id ~/pull-image-id
+      - name: Check code style
+        run: |
+          corepack pnpm install
+          corepack pnpm typecheck
+          corepack pnpm lint
+          go fmt ./...
+          go vet ./...
+          git diff --exit-code
     timeout-minutes: 30

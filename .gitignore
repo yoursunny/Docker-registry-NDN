@@ -1,5 +1,5 @@
-*.out
 .env
+*.out
 /.vscode
 /pnpm-lock.yaml
 ecosystem.config.js
