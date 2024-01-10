@@ -20,9 +20,11 @@ It requires a local NDN forwarder, which should have a globally reachable name p
 
 ## Server Installation (Docker)
 
-Build the server container image:
+Pull or build the server container image:
 
 ```bash
+docker pull docker.yoursunny.dev/registry-ndn-server
+
 docker build -t docker.yoursunny.dev/registry-ndn-server -f server.Dockerfile .
 ```
 
@@ -38,12 +40,12 @@ docker run -d --name registry-ndn-server \
 
 See [server/sample.env](server/sample.env) for explanation of the environment variables.
 
-## Client Installation and Usage
+## Client Installation and Startup (Go)
 
 The [client](client/) program should run on every client that intends to pull from the Docker registry.
 It does not require a local NDN forwarder.
 
-1. Install Go 1.20.
+1. Install Go 1.21.
 2. Build the client: `env GOBIN=$(pwd) CGO_ENABLED=0 go install github.com/yoursunny/Docker-registry-NDN/client@latest && mv client Docker-registry-NDN-client`
 
 Run `./Docker-registry-NDN-client --help` to see available command line flags.
@@ -53,6 +55,29 @@ For example:
 ```bash
 ./Docker-registry-NDN-client --upstream https://docker.example.com --name /example/docker
 ```
+
+## Client Installation and Startup (Docker)
+
+Pull or build the client container image:
+
+```bash
+docker pull docker.yoursunny.dev/registry-ndn-client
+
+docker build -t docker.yoursunny.dev/registry-ndn-client -f client.Dockerfile .
+```
+
+Start the client container:
+
+```bash
+docker run -d --name registry-ndn-client \
+  --mount type=bind,source=/run/nfd/nfd.sock,target=/run/nfd/nfd.sock,readonly=true \
+  docker.yoursunny.dev/registry-ndn-client \
+  --upstream https://docker.example.com --name /example/docker
+```
+
+See [server/sample.env](server/sample.env) for explanation of the environment variables.
+
+## Usage
 
 The client starts a local HTTP endpoint on `http://127.0.0.1:5000` (you can change this via `--listen` flag).
 With the client running, you can pull Docker images from its HTTP endpoint:

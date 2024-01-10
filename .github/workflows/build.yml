@@ -14,47 +14,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build server
-        uses: docker/build-push-action@v5
-        with:
-          tags: localhost/registry-ndn-server
-          context: .
-          file: server.Dockerfile
-      - name: Setup NFD
+      - name: Build containers
         run: |
-          docker pull ghcr.io/named-data/nfd:latest
-          sudo mkdir -p /run/nfd
-          docker run -d --name nfd \
-            --mount type=bind,source=/run/nfd,target=/run/nfd \
-            ghcr.io/named-data/nfd:latest
-      - name: Setup registry and server
-        run: |
-          docker image pull registry:2
-          docker run -d --name registry --publish 127.0.0.1:5000:5000 registry:2
-          docker run -d --name registry-ndn-server \
-            --mount type=bind,source=/run/nfd/nfd.sock,target=/run/nfd/nfd.sock,readonly=true \
-            -e DOCKER_NDN_REGISTRY=$(docker inspect -f 'http://{{.NetworkSettings.IPAddress}}:5000' registry) \
-            -e DOCKER_NDN_NAME=/docker \
-            localhost/registry-ndn-server
-      - name: Build client
-        run: |
-          env GOBIN=$HOME CGO_ENABLED=0 go install ./client
-          mv ~/client ~/Docker-registry-NDN-client
-      - name: Start client
+          docker compose -f compose.e2etest.yml build
+          docker compose -f compose.e2etest.yml pull
+      - name: Start containers
         uses: JarvusInnovations/background-action@v1
         with:
           run: |
-            ~/Docker-registry-NDN-client \
-              --listen :3000 --upstream http://localhost:5000 \
-              --name /docker --router /run/nfd/nfd.sock &
-          wait-on: tcp:127.0.0.1:3000
+            docker compose -f compose.e2etest.yml up &
+          wait-on: |
+            tcp:127.0.0.1:3000
+            tcp:127.0.0.1:5000
           log-output-if: true
       - name: Push demo image to registry
         run: |
           docker image inspect -f '{{.Id}}' buildpack-deps:bullseye | tee ~/push-image-id
           docker image tag buildpack-deps:bullseye localhost:5000/demo
           docker image push localhost:5000/demo
-          docker image prune -fa
+          docker image rm -f $(cat ~/push-image-id)
       - name: Pull demo image over NDN
         run: |
           docker image pull localhost:3000/demo

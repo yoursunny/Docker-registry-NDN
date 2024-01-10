@@ -1,0 +1,7 @@
+.env
+/client/client
+/package.json
+/pnpm-lock.yaml
+/server
+node_modules/
+runtime/

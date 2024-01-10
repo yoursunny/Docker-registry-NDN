@@ -1,0 +1,61 @@
+networks:
+  net:
+    name: net
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: 0
+    ipam:
+      config:
+        - subnet: 172.22.250.0/24
+
+volumes:
+  run-nfd: {}
+
+services:
+  registry:
+    image: registry:2
+    networks:
+      net:
+        ipv4_address: 172.22.250.10
+    ports:
+      - 127.0.0.1:5000:5000/tcp
+
+  nfd:
+    image: ghcr.io/named-data/nfd:latest
+    network_mode: none
+    volumes:
+      - run-nfd:/run/nfd
+
+  server:
+    build:
+      context: .
+      dockerfile: server.Dockerfile
+    depends_on:
+      - registry
+      - nfd
+    environment:
+      DOCKER_NDN_REGISTRY: http://172.22.250.10:5000
+      DOCKER_NDN_NAME: /docker
+    networks:
+      net:
+        ipv4_address: 172.22.250.11
+    volumes:
+      - run-nfd:/run/nfd
+
+  client:
+    build:
+      context: .
+      dockerfile: client.Dockerfile
+    depends_on:
+      - nfd
+    command: |
+      --listen :3000 --upstream http://172.22.250.10:5000
+      --name /docker --router /run/nfd/nfd.sock
+    environment:
+      DOCKER_NDN_LOG: DEBUG
+    networks:
+      net:
+        ipv4_address: 172.22.250.20
+    ports:
+      - 127.0.0.1:3000:3000/tcp
+    volumes:
+      - run-nfd:/run/nfd
