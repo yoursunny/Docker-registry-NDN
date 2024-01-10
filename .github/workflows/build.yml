@@ -14,30 +14,34 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build containers
+      - name: Start containers
         run: |
           docker compose -f compose.e2etest.yml build
           docker compose -f compose.e2etest.yml pull
-      - name: Start containers
-        uses: JarvusInnovations/background-action@v1
-        with:
-          run: |
-            docker compose -f compose.e2etest.yml up &
-          wait-on: |
-            tcp:127.0.0.1:3000
-            tcp:127.0.0.1:5000
-          log-output-if: true
+          docker compose -f compose.e2etest.yml up -d
+          sleep 5
       - name: Push demo image to registry
         run: |
-          docker image inspect -f '{{.Id}}' buildpack-deps:bullseye | tee ~/push-image-id
-          docker image tag buildpack-deps:bullseye localhost:5000/demo
+          docker image inspect -f '{{.Id}}' $DEMO_IMAGE || docker pull $DEMO_IMAGE
+          docker image inspect -f '{{.Id}}' $DEMO_IMAGE | tee ~/push-image-id
+          docker image tag $DEMO_IMAGE localhost:5000/demo
           docker image push localhost:5000/demo
           docker image rm -f $(cat ~/push-image-id)
+        env:
+          DEMO_IMAGE: node:20
       - name: Pull demo image over NDN
         run: |
           docker image pull localhost:3000/demo
           docker image inspect -f '{{.Id}}' localhost:3000/demo | tee ~/pull-image-id
           diff ~/push-image-id ~/pull-image-id
+      - name: Gather container logs
+        if: ${{ !cancelled() }}
+        run: |
+          for SERVICE in nfd server client; do
+            echo
+            echo $SERVICE
+            docker compose -f compose.e2etest.yml logs --no-log-prefix $SERVICE
+          done
       - name: Check code style
         run: |
           corepack pnpm install
