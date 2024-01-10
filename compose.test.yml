@@ -11,6 +11,14 @@ volumes:
   run-nfd: {}
 
 services:
+  nfd:
+    image: ghcr.io/named-data/nfd:latest
+    networks:
+      net:
+        ipv4_address: 172.22.250.63
+    volumes:
+      - run-nfd:/run/nfd
+
   registry:
     image: registry:2
     networks:
@@ -18,12 +26,6 @@ services:
         ipv4_address: 172.22.250.10
     ports:
       - 127.0.0.1:5000:5000/tcp
-
-  nfd:
-    image: ghcr.io/named-data/nfd:latest
-    network_mode: none
-    volumes:
-      - run-nfd:/run/nfd
 
   server:
     build:
@@ -49,7 +51,7 @@ services:
       - nfd
     command: |
       --listen :3000 --upstream http://172.22.250.10:5000
-      --name /docker --router /run/nfd/nfd.sock
+      --name /docker --router 172.22.250.63:6363
     environment:
       DOCKER_NDN_LOG: DEBUG
     networks:
