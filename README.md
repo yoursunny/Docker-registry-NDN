@@ -30,7 +30,7 @@ Start the server container:
 
 ```bash
 docker run -d --name registry-ndn-server \
-  --mount type=bind,source=/run/nfd.sock,target=/run/nfd.sock,readonly=true \
+  --mount type=bind,source=/run/nfd/nfd.sock,target=/run/nfd/nfd.sock,readonly=true \
   -e DOCKER_NDN_REGISTRY=http://172.17.0.2:5000 \
   -e DOCKER_NDN_NAME=/docker \
   docker.yoursunny.dev/registry-ndn-server

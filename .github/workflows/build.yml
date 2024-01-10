@@ -7,31 +7,32 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Setup NFD
-        run: |
-          echo "deb [arch=amd64 trusted=yes] https://nfd-nightly-apt.ndn.today/ubuntu jammy main" \
-            | sudo tee /etc/apt/sources.list.d/nfd-nightly.list
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends nfd
       - name: Build server
         uses: docker/build-push-action@v5
         with:
           tags: localhost/registry-ndn-server
           context: .
           file: server.Dockerfile
+      - name: Setup NFD
+        run: |
+          docker pull ghcr.io/named-data/nfd:latest
+          sudo mkdir -p /run/nfd
+          docker run -d --name nfd \
+            --mount type=bind,source=/run/nfd,target=/run/nfd \
+            ghcr.io/named-data/nfd:latest
       - name: Setup registry and server
         run: |
           docker image pull registry:2
           docker run -d --name registry --publish 127.0.0.1:5000:5000 registry:2
           docker run -d --name registry-ndn-server \
-            --mount type=bind,source=/run/nfd.sock,target=/run/nfd.sock,readonly=true \
+            --mount type=bind,source=/run/nfd/nfd.sock,target=/run/nfd/nfd.sock,readonly=true \
             -e DOCKER_NDN_REGISTRY=$(docker inspect -f 'http://{{.NetworkSettings.IPAddress}}:5000' registry) \
             -e DOCKER_NDN_NAME=/docker \
             localhost/registry-ndn-server
@@ -45,7 +46,7 @@ jobs:
           run: |
             ~/Docker-registry-NDN-client \
               --listen :3000 --upstream http://localhost:5000 \
-              --name /docker --router /run/nfd.sock &
+              --name /docker --router /run/nfd/nfd.sock &
           wait-on: tcp:127.0.0.1:3000
           log-output-if: true
       - name: Push demo image to registry

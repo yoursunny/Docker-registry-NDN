@@ -6,7 +6,7 @@
     "serve": "cd server && node ./main.js",
     "typecheck": "tsc"
   },
-  "packageManager": "pnpm@8.11.0",
+  "packageManager": "pnpm@8.14.0",
   "dependencies": {
     "@ndn/cli-common": "https://ndnts-nightly.ndn.today/cli-common.tgz",
     "@ndn/endpoint": "https://ndnts-nightly.ndn.today/endpoint.tgz",
@@ -15,13 +15,13 @@
     "@ndn/util": "https://ndnts-nightly.ndn.today/util.tgz",
     "@strattadb/environment": "^8.0.2",
     "dotenv": "^16.3.1",
-    "mnemonist": "^0.39.6",
+    "mnemonist": "^0.39.7",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "@types/node": "^20.10.4",
+    "@types/node": "^20.10.8",
     "@types/yargs": "^17.0.32",
-    "@yoursunny/xo-config": "^0.56.0",
+    "@yoursunny/xo-config": "^0.56.1",
     "typescript": "~5.3.3"
   }
 }
